@@ -71,6 +71,10 @@ flags.DEFINE_float(
 flags.DEFINE_integer("save_checkpoints_steps", 1000,
                      "How often to save the model checkpoint.")
 
+flags.DEFINE_bool(
+    "save_for_serving", False,
+    "Whether to save the model for serving.")
+
 
 class InputExample(object):
   """A single training/test example for simple sequence classification."""
@@ -122,14 +126,9 @@ class LCQMCProcessor(object):
       examples = []
       for (i, line) in enumerate(lines):
           guid = "%s-%s" % (set_type, i)
-          if set_type == "test":
-              text_a = tokenization.convert_to_unicode(line[0])
-              text_b = tokenization.convert_to_unicode(line[1])
-              label = "0"
-          else:
-              text_a = tokenization.convert_to_unicode(line[0])
-              text_b = tokenization.convert_to_unicode(line[1])
-              label = tokenization.convert_to_unicode(line[3])
+          text_a = tokenization.convert_to_unicode(line[0])
+          text_b = tokenization.convert_to_unicode(line[1])
+          label = tokenization.convert_to_unicode(line[2])
           examples.append(
               InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
       return examples
@@ -389,6 +388,18 @@ def convert_examples_to_features(examples, label_list, max_seq_length,
   return features
 
 
+def save_for_serving(estimator, serving_dir):
+    feature_map = {
+        "input_ids": tf.placeholder(tf.int32, shape=[None, FLAGS.max_seq_length], name='input_ids'),
+        "input_mask": tf.placeholder(tf.int32, shape=[None, FLAGS.max_seq_length], name='input_mask'),
+        "segment_ids": tf.placeholder(tf.int32, shape=[None, FLAGS.max_seq_length], name='segment_ids'),
+        "label_ids": tf.placeholder(tf.int32, shape=[None], name='label_ids'),
+    }
+    serving_input_receiver_fn = tf.estimator.export.build_raw_serving_input_receiver_fn(feature_map)
+    estimator.export_savedmodel(serving_dir,
+                                serving_input_receiver_fn,
+                                strip_default_attrs=True)
+
 def main(_):
   tf.logging.set_verbosity(tf.logging.INFO)
 
@@ -436,7 +447,7 @@ def main(_):
       use_one_hot_embeddings=False)
 
   cfg = tf.estimator.RunConfig(save_checkpoints_steps=FLAGS.save_checkpoint_steps)
-  estimator = tf.estimator.Estimator(model_fn, 'results/model', cfg, params=None)
+  estimator = tf.estimator.Estimator(model_fn, FLAGS.output_dir, cfg, params=None)
 
   if FLAGS.do_train:
     tf.logging.info("***** Running training *****")
@@ -487,6 +498,10 @@ def main(_):
         num_written_lines += 1
     assert num_written_lines == num_actual_predict_examples
 
+  if FLAGS.do_train and FLAGS.save_for_serving:
+      serving_dir = os.path.join(FLAGS.output_dir, 'serving')
+      save_for_serving(estimator, serving_dir)
+
 
 if __name__ == "__main__":
   flags.mark_flag_as_required("data_dir")
@@ -495,22 +510,3 @@ if __name__ == "__main__":
   flags.mark_flag_as_required("bert_config_file")
   flags.mark_flag_as_required("output_dir")
   tf.app.run()
-
-  # sess_config = tf.ConfigProto()
-  # sess_config.allow_soft_placement = True
-  # sess_config.gpu_options.per_process_gpu_memory_fraction = 0.9
-  # sess_config.gpu_options.allow_growth = True
-  # sess_config.report_tensor_allocations_upon_oom = True
-  # sess_config.log_device_placement = True
-  # estimator运行环境配置
-  # if FLAGS.gpu_cores:
-  #     gpu_cors = tuple(eval(FLAGS.gpu_cores))  # FLAGS.gpu_cores
-  #     devices = ["/device:GPU:%d" % d for d in gpu_cors]  # "/device:GPU:%d" % d作为元组中的一个元素整体
-  #     distribution = tf.contrib.distribute.MirroredStrategy(devices=devices)  # distribution是一个MirroredStrategy类
-  #     config = RunConfig(save_checkpoints_steps=FLAGS.check_steps, train_distribute=distribution)
-  # else:
-  #     config = RunConfig(save_checkpoints_steps=FLAGS.check_steps, session_config=sess_config)  # config是一个RunConfig类对象
-
-  # estimator创建
-  # estimator = tf.estimator.Estimator(model_fn=model_fn, model_dir=FLAGS.model_dir, config=config, params=params)
-
