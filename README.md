@@ -11,7 +11,7 @@ If you want to use the fine tune code to train on you own data for specific task
 
 ## usage
 
-```python
+```shell
 export BERT_BASE_DIR=/path/to/bert/uncased_L-12_H-768_A-12
 
 python train.py \
