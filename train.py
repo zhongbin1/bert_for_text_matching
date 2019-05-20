@@ -22,8 +22,6 @@ flags.DEFINE_string(
     "The config json file corresponding to the pre-trained BERT model. "
     "This specifies the model architecture.")
 
-flags.DEFINE_string("task_name", None, "The name of the task to train.")
-
 flags.DEFINE_string("vocab_file", None,
                     "The vocabulary file that the BERT model was trained on.")
 
@@ -48,12 +46,12 @@ flags.DEFINE_integer(
     "Sequences longer than this will be truncated, and sequences shorter "
     "than this will be padded.")
 
-flags.DEFINE_bool("do_train", False, "Whether to run training.")
+flags.DEFINE_bool("do_train", True, "Whether to run training.")
 
-flags.DEFINE_bool("do_eval", False, "Whether to run eval on the dev set.")
+flags.DEFINE_bool("do_eval", True, "Whether to run eval on the dev set.")
 
 flags.DEFINE_bool(
-    "do_predict", False,
+    "do_predict", True,
     "Whether to run the model in inference mode on the test set.")
 
 flags.DEFINE_integer("batch_size", 32, "Total batch size for training.")
@@ -102,8 +100,11 @@ class InputFeatures(object):
     self.is_real_example = is_real_example
 
 
-class LCQMCProcessor(object):
-  """Processor for the LCQMC data set."""
+class SimProcessor(object):
+  """Processor for the text matching data set.
+  data format:
+  text_a \t text_b \t label \n
+  """
 
   def get_train_examples(self, data_dir):
     return self._create_examples(
@@ -392,8 +393,7 @@ def save_for_serving(estimator, serving_dir):
     feature_map = {
         "input_ids": tf.placeholder(tf.int32, shape=[None, FLAGS.max_seq_length], name='input_ids'),
         "input_mask": tf.placeholder(tf.int32, shape=[None, FLAGS.max_seq_length], name='input_mask'),
-        "segment_ids": tf.placeholder(tf.int32, shape=[None, FLAGS.max_seq_length], name='segment_ids'),
-        "label_ids": tf.placeholder(tf.int32, shape=[None], name='label_ids'),
+        "segment_ids": tf.placeholder(tf.int32, shape=[None, FLAGS.max_seq_length], name='segment_ids')
     }
     serving_input_receiver_fn = tf.estimator.export.build_raw_serving_input_receiver_fn(feature_map)
     estimator.export_savedmodel(serving_dir,
@@ -409,7 +409,7 @@ def main(_):
   bert_config = modeling.BertConfig.from_json_file(FLAGS.bert_config_file)
   tf.gfile.MakeDirs(FLAGS.output_dir)
 
-  processor = LCQMCProcessor()
+  processor = SimProcessor()
   label_list = processor.get_labels()
 
   tokenizer = tokenization.FullTokenizer(
@@ -459,7 +459,6 @@ def main(_):
 
   if FLAGS.do_eval:
     eval_examples = processor.get_dev_examples(FLAGS.data_dir)
-    num_actual_eval_examples = len(eval_examples)
     tf.logging.info("***** Running evaluation *****")
     tf.logging.info("  Num examples = %d", len(eval_examples))
     tf.logging.info("  Batch size = %d", FLAGS.batch_size)
@@ -505,7 +504,6 @@ def main(_):
 
 if __name__ == "__main__":
   flags.mark_flag_as_required("data_dir")
-  flags.mark_flag_as_required("task_name")
   flags.mark_flag_as_required("vocab_file")
   flags.mark_flag_as_required("bert_config_file")
   flags.mark_flag_as_required("output_dir")
