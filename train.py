@@ -13,26 +13,28 @@ FLAGS = flags.FLAGS
 
 ## Required parameters
 flags.DEFINE_string(
-    "data_dir", None,
+    "data_dir", "/input0",
     "The input data dir. Should contain the .tsv files (or other data files) "
     "for the task.")
 
 flags.DEFINE_string(
-    "bert_config_file", None,
+    "bert_config_file", "/input1/BERT/chinese_L-12_H-768_A-12/bert_config.json",
     "The config json file corresponding to the pre-trained BERT model. "
     "This specifies the model architecture.")
 
-flags.DEFINE_string("vocab_file", None,
+flags.DEFINE_string("task_name", "lcqmc", "The name of the task to train.")
+
+flags.DEFINE_string("vocab_file", "/input1/BERT/chinese_L-12_H-768_A-12/vocab.txt",
                     "The vocabulary file that the BERT model was trained on.")
 
 flags.DEFINE_string(
-    "output_dir", None,
+    "output_dir", "/output/",
     "The output directory where the model checkpoints will be written.")
 
 ## Other parameters
 
 flags.DEFINE_string(
-    "init_checkpoint", None,
+    "init_checkpoint", "/input1/BERT/chinese_L-12_H-768_A-12/bert_model.ckpt",
     "Initial checkpoint (usually from a pre-trained BERT model).")
 
 flags.DEFINE_bool(
@@ -41,7 +43,7 @@ flags.DEFINE_bool(
     "models and False for cased models.")
 
 flags.DEFINE_integer(
-    "max_seq_length", 128,
+    "max_seq_length", 64,
     "The maximum total input sequence length after WordPiece tokenization. "
     "Sequences longer than this will be truncated, and sequences shorter "
     "than this will be padded.")
@@ -58,7 +60,7 @@ flags.DEFINE_integer("batch_size", 32, "Total batch size for training.")
 
 flags.DEFINE_float("learning_rate", 2e-5, "The initial learning rate for Adam.")
 
-flags.DEFINE_integer("num_train_epochs", 3,
+flags.DEFINE_integer("num_train_epochs", 2,
                    "Total number of training epochs to perform.")
 
 flags.DEFINE_float(
@@ -66,12 +68,8 @@ flags.DEFINE_float(
     "Proportion of training to perform linear learning rate warmup for. "
     "E.g., 0.1 = 10% of training.")
 
-flags.DEFINE_integer("save_checkpoints_steps", 1000,
+flags.DEFINE_integer("save_checkpoint_steps", 1000,
                      "How often to save the model checkpoint.")
-
-flags.DEFINE_bool(
-    "save_for_serving", False,
-    "Whether to save the model for serving.")
 
 
 class InputExample(object):
@@ -100,24 +98,21 @@ class InputFeatures(object):
     self.is_real_example = is_real_example
 
 
-class SimProcessor(object):
-  """Processor for the text matching data set.
-  data format:
-  text_a \t text_b \t label \n
-  """
+class LCQMCProcessor(object):
+  """Processor for the LCQMC data set."""
 
   def get_train_examples(self, data_dir):
     return self._create_examples(
-        self._read_tsv(os.path.join(data_dir, "train.tsv")), "train")
+        self._read_tsv(os.path.join(data_dir, "LCQMC_train.dat")), "train")
 
   def get_dev_examples(self, data_dir):
 
     return self._create_examples(
-        self._read_tsv(os.path.join(data_dir, "dev.tsv")), "dev")
+        self._read_tsv(os.path.join(data_dir, "LCQMC_dev.dat")), "dev")
 
   def get_test_examples(self, data_dir):
     return self._create_examples(
-        self._read_tsv(os.path.join(data_dir, "test.tsv")), "test")
+        self._read_tsv(os.path.join(data_dir, "LCQMC_test.dat")), "test")
 
   def get_labels(self):
     return ["0", "1"]
@@ -285,6 +280,8 @@ def model_fn_builder(bert_config, num_labels, init_checkpoint, learning_rate,
     segment_ids = features["segment_ids"]
     label_ids = labels
 
+    # input_ids = tf.identity(input_ids, name='input_ids')
+
     is_training = (mode == tf.estimator.ModeKeys.TRAIN)
 
     (total_loss, per_example_loss, logits, probabilities) = create_model(
@@ -389,17 +386,6 @@ def convert_examples_to_features(examples, label_list, max_seq_length,
   return features
 
 
-def save_for_serving(estimator, serving_dir):
-    feature_map = {
-        "input_ids": tf.placeholder(tf.int32, shape=[None, FLAGS.max_seq_length], name='input_ids'),
-        "input_mask": tf.placeholder(tf.int32, shape=[None, FLAGS.max_seq_length], name='input_mask'),
-        "segment_ids": tf.placeholder(tf.int32, shape=[None, FLAGS.max_seq_length], name='segment_ids')
-    }
-    serving_input_receiver_fn = tf.estimator.export.build_raw_serving_input_receiver_fn(feature_map)
-    estimator.export_savedmodel(serving_dir,
-                                serving_input_receiver_fn,
-                                strip_default_attrs=True)
-
 def main(_):
   tf.logging.set_verbosity(tf.logging.INFO)
 
@@ -409,7 +395,7 @@ def main(_):
   bert_config = modeling.BertConfig.from_json_file(FLAGS.bert_config_file)
   tf.gfile.MakeDirs(FLAGS.output_dir)
 
-  processor = SimProcessor()
+  processor = LCQMCProcessor()
   label_list = processor.get_labels()
 
   tokenizer = tokenization.FullTokenizer(
@@ -446,7 +432,7 @@ def main(_):
       num_warmup_steps=num_warmup_steps,
       use_one_hot_embeddings=False)
 
-  cfg = tf.estimator.RunConfig(save_checkpoints_steps=FLAGS.save_checkpoint_steps)
+  cfg = tf.estimator.RunConfig(save_checkpoints_steps=1000)
   estimator = tf.estimator.Estimator(model_fn, FLAGS.output_dir, cfg, params=None)
 
   if FLAGS.do_train:
@@ -459,6 +445,7 @@ def main(_):
 
   if FLAGS.do_eval:
     eval_examples = processor.get_dev_examples(FLAGS.data_dir)
+    num_actual_eval_examples = len(eval_examples)
     tf.logging.info("***** Running evaluation *****")
     tf.logging.info("  Num examples = %d", len(eval_examples))
     tf.logging.info("  Batch size = %d", FLAGS.batch_size)
@@ -478,7 +465,7 @@ def main(_):
 
     tf.logging.info("***** Running prediction*****")
     tf.logging.info("  Num examples = %d", len(predict_examples))
-    tf.logging.info("  Batch size = %d", FLAGS.predict_batch_size)
+    tf.logging.info("  Batch size = %d", FLAGS.batch_size)
 
     result = estimator.predict(input_fn=test_input_fn)
 
@@ -497,14 +484,30 @@ def main(_):
         num_written_lines += 1
     assert num_written_lines == num_actual_predict_examples
 
-  if FLAGS.do_train and FLAGS.save_for_serving:
-      serving_dir = os.path.join(FLAGS.output_dir, 'serving')
-      save_for_serving(estimator, serving_dir)
-
 
 if __name__ == "__main__":
-  flags.mark_flag_as_required("data_dir")
-  flags.mark_flag_as_required("vocab_file")
-  flags.mark_flag_as_required("bert_config_file")
-  flags.mark_flag_as_required("output_dir")
+  # flags.mark_flag_as_required("data_dir")
+  # flags.mark_flag_as_required("task_name")
+  # flags.mark_flag_as_required("vocab_file")
+  # flags.mark_flag_as_required("bert_config_file")
+  # flags.mark_flag_as_required("output_dir")
   tf.app.run()
+
+  # sess_config = tf.ConfigProto()
+  # sess_config.allow_soft_placement = True
+  # sess_config.gpu_options.per_process_gpu_memory_fraction = 0.9
+  # sess_config.gpu_options.allow_growth = True
+  # sess_config.report_tensor_allocations_upon_oom = True
+  # sess_config.log_device_placement = True
+  # estimator运行环境配置
+  # if FLAGS.gpu_cores:
+  #     gpu_cors = tuple(eval(FLAGS.gpu_cores))  # FLAGS.gpu_cores
+  #     devices = ["/device:GPU:%d" % d for d in gpu_cors]  # "/device:GPU:%d" % d作为元组中的一个元素整体
+  #     distribution = tf.contrib.distribute.MirroredStrategy(devices=devices)  # distribution是一个MirroredStrategy类
+  #     config = RunConfig(save_checkpoints_steps=FLAGS.check_steps, train_distribute=distribution)
+  # else:
+  #     config = RunConfig(save_checkpoints_steps=FLAGS.check_steps, session_config=sess_config)  # config是一个RunConfig类对象
+
+  # estimator创建
+  # estimator = tf.estimator.Estimator(model_fn=model_fn, model_dir=FLAGS.model_dir, config=config, params=params)
+
