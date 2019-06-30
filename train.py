@@ -13,18 +13,18 @@ FLAGS = flags.FLAGS
 
 ## Required parameters
 flags.DEFINE_string(
-    "data_dir", "/input0",
+    "data_dir", "./data/lcqmc",
     "The input data dir. Should contain the .tsv files (or other data files) "
     "for the task.")
 
 flags.DEFINE_string(
-    "bert_config_file", "/input1/BERT/chinese_L-12_H-768_A-12/bert_config.json",
+    "bert_config_file", "",
     "The config json file corresponding to the pre-trained BERT model. "
     "This specifies the model architecture.")
 
 flags.DEFINE_string("task_name", "lcqmc", "The name of the task to train.")
 
-flags.DEFINE_string("vocab_file", "/input1/BERT/chinese_L-12_H-768_A-12/vocab.txt",
+flags.DEFINE_string("vocab_file", "",
                     "The vocabulary file that the BERT model was trained on.")
 
 flags.DEFINE_string(
@@ -34,7 +34,7 @@ flags.DEFINE_string(
 ## Other parameters
 
 flags.DEFINE_string(
-    "init_checkpoint", "/input1/BERT/chinese_L-12_H-768_A-12/bert_model.ckpt",
+    "init_checkpoint", "",
     "Initial checkpoint (usually from a pre-trained BERT model).")
 
 flags.DEFINE_bool(
@@ -60,7 +60,7 @@ flags.DEFINE_integer("batch_size", 32, "Total batch size for training.")
 
 flags.DEFINE_float("learning_rate", 2e-5, "The initial learning rate for Adam.")
 
-flags.DEFINE_integer("num_train_epochs", 2,
+flags.DEFINE_integer("num_train_epochs", 3,
                    "Total number of training epochs to perform.")
 
 flags.DEFINE_float(
@@ -432,7 +432,7 @@ def main(_):
       num_warmup_steps=num_warmup_steps,
       use_one_hot_embeddings=False)
 
-  cfg = tf.estimator.RunConfig(save_checkpoints_steps=1000)
+  cfg = tf.estimator.RunConfig(save_checkpoints_steps=FLAGS.save_checkpoint_steps)
   estimator = tf.estimator.Estimator(model_fn, FLAGS.output_dir, cfg, params=None)
 
   if FLAGS.do_train:
@@ -486,28 +486,9 @@ def main(_):
 
 
 if __name__ == "__main__":
-  # flags.mark_flag_as_required("data_dir")
-  # flags.mark_flag_as_required("task_name")
-  # flags.mark_flag_as_required("vocab_file")
-  # flags.mark_flag_as_required("bert_config_file")
-  # flags.mark_flag_as_required("output_dir")
+  flags.mark_flag_as_required("data_dir")
+  flags.mark_flag_as_required("task_name")
+  flags.mark_flag_as_required("vocab_file")
+  flags.mark_flag_as_required("bert_config_file")
+  flags.mark_flag_as_required("output_dir")
   tf.app.run()
-
-  # sess_config = tf.ConfigProto()
-  # sess_config.allow_soft_placement = True
-  # sess_config.gpu_options.per_process_gpu_memory_fraction = 0.9
-  # sess_config.gpu_options.allow_growth = True
-  # sess_config.report_tensor_allocations_upon_oom = True
-  # sess_config.log_device_placement = True
-  # estimator运行环境配置
-  # if FLAGS.gpu_cores:
-  #     gpu_cors = tuple(eval(FLAGS.gpu_cores))  # FLAGS.gpu_cores
-  #     devices = ["/device:GPU:%d" % d for d in gpu_cors]  # "/device:GPU:%d" % d作为元组中的一个元素整体
-  #     distribution = tf.contrib.distribute.MirroredStrategy(devices=devices)  # distribution是一个MirroredStrategy类
-  #     config = RunConfig(save_checkpoints_steps=FLAGS.check_steps, train_distribute=distribution)
-  # else:
-  #     config = RunConfig(save_checkpoints_steps=FLAGS.check_steps, session_config=sess_config)  # config是一个RunConfig类对象
-
-  # estimator创建
-  # estimator = tf.estimator.Estimator(model_fn=model_fn, model_dir=FLAGS.model_dir, config=config, params=params)
-
