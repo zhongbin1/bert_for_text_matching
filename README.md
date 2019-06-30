@@ -44,7 +44,7 @@ python train.py \
 
 #### step 2 导出模型
 
-tensorflow serving部署之前需要将模型从checkpoint转化为saved_model格式。
+使用tensorflow serving部署之前需要将模型从checkpoint导出为saved_model格式。
 
 ```shell
 python export.py \
@@ -58,7 +58,7 @@ python export.py \
 - 安装docker，并拉取tensorflow serving镜像(若使用GPU加速，还需安装nvidia-docker)
 
   ```
-  docker pull tensorflow/serving/:1.12.0-gpu
+  docker pull tensorflow/serving:1.12.0-gpu
   ```
 
 - 启动容器服务，对外提供rest接口
