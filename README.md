@@ -38,7 +38,7 @@ python train.py \
   --max_seq_length=64 \
   --train_batch_size=32 \
   --learning_rate=2e-5 \
-  --num_train_epochs=3.0 \
+  --num_train_epochs=3 \
   --output_dir=/path/for/output/
 ```
 
